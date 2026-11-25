@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types, errors
 
-from tools import calculator, quiz_generator
+from tools import calculator, quiz_generator , notes_summarizer
 
 load_dotenv()
 
@@ -45,6 +45,10 @@ class StudyMateAgent:
         - Each question must have exactly four options.
         - Include the correct answer and a short explanation.
         - Never invent quiz results after tool validation fails.
+        - Summarize long study notes into concise summaries.
+        - Identify important concepts and key points.
+        - Explain difficult terms in simple English and Bangla.
+        - When users request note summarization, use the notes_summarizer tool.
 
         Always be friendly and educational.
         """
@@ -71,6 +75,25 @@ class StudyMateAgent:
                                 )
                             },
                             required=["expression"]
+                        )
+                    ),
+
+
+                    types.FunctionDeclaration(
+                        name="notes_summarizer",
+                        description=(
+                            "Prepare and validate student notes for summarization. "
+                            "Use this tool when the user asks to summarize notes."
+                        ),
+                        parameters=types.Schema(
+                            type=types.Type.OBJECT,
+                            properties={
+                                "text": types.Schema(
+                                    type=types.Type.STRING,
+                                    description="The complete study notes provided by the user."
+                                )
+                            },
+                            required=["text"]
                         )
                     ),
                     
@@ -186,6 +209,13 @@ class StudyMateAgent:
                             args["topic"],
                             args["questions"]
                         )
+
+                    elif function_call.name == "notes_summarizer":
+                        args = function_call.args or {}
+
+                        print("\n[Agent] Notes Summarizer tool selected")
+
+                        result = notes_summarizer(args["text"])
 
                     else:
                         continue

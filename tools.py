@@ -204,3 +204,28 @@ def quiz_generator(topic: str, questions: list) -> dict:
         "total_questions": len(validated_questions),
         "questions": validated_questions
     }
+
+
+
+def notes_summarizer(text: str) -> dict:
+    """
+    Validate and prepare study notes for summarization.
+    """
+
+    if not isinstance(text, str) or not text.strip():
+        return {
+            "success": False,
+            "error": "Notes cannot be empty."
+        }
+
+    if len(text) < 30:
+        return {
+            "success": False,
+            "error": "Please provide at least 30 characters of notes."
+        }
+
+    return {
+        "success": True,
+        "original_length": len(text),
+        "notes": text.strip()
+    }
