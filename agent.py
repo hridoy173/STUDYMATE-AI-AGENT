@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types, errors
 
-from tools import calculator
+from tools import calculator, quiz_generator
 
 load_dotenv()
 
@@ -40,6 +40,11 @@ class StudyMateAgent:
         - Never calculate mathematical results yourself
           when the calculator tool is available.
         - Explain the final result clearly.
+        - If the user requests an MCQ quiz, use the quiz_generator tool.
+        - Generate exactly the number of questions requested.
+        - Each question must have exactly four options.
+        - Include the correct answer and a short explanation.
+        - Never invent quiz results after tool validation fails.
 
         Always be friendly and educational.
         """
@@ -67,10 +72,60 @@ class StudyMateAgent:
                             },
                             required=["expression"]
                         )
+                    ),
+                    
+                    types.FunctionDeclaration(
+                        name="quiz_generator",
+                        description=(
+                            "Validate and structure MCQ questions for a student quiz. "
+                            "Use this tool when the user requests a quiz."
+                        ),
+                        parameters=types.Schema(
+                            type=types.Type.OBJECT,
+                            properties={
+                                "topic": types.Schema(
+                                    type=types.Type.STRING,
+                                    description="The academic topic of the quiz."
+                                ),
+                                "questions": types.Schema(
+                                    type=types.Type.ARRAY,
+                                    items=types.Schema(
+                                        type=types.Type.OBJECT,
+                                        properties={
+                                            "question": types.Schema(
+                                                type=types.Type.STRING
+                                            ),
+                                            "options": types.Schema(
+                                                type=types.Type.ARRAY,
+                                                items=types.Schema(
+                                                    type=types.Type.STRING
+                                                )
+                                            ),
+                                            "correct_answer": types.Schema(
+                                                type=types.Type.STRING
+                                            ),
+                                            "explanation": types.Schema(
+                                                type=types.Type.STRING
+                                            )
+                                        },
+                                        required=[
+                                            "question",
+                                            "options",
+                                            "correct_answer",
+                                            "explanation"
+                                        ]
+                                    )
+                                )
+                            },
+                            required=["topic", "questions"]
+                        )
                     )
                 ]
-            )
+            ),
+
         ]
+
+
 
     def ask(self, question: str) -> str:
 
@@ -97,26 +152,52 @@ class StudyMateAgent:
                 # Step 3: Execute requested Python tools
                 function_responses = []
 
+                # for function_call in function_calls:
+
+                #     if function_call.name == "calculator":
+
+                #         args = function_call.args or {}
+
+                #         print("\n[Agent] Calculator tool selected")
+
+                #         result = calculator(
+                #             args["expression"]
+                #         )
+
+                #         print("[Tool] Result:", result)
+
+                #         function_responses.append(
+                #             types.Part.from_function_response(
+                #                 name=function_call.name,
+                #                 response=result
+                #             )
+                #         )
+
                 for function_call in function_calls:
+                    args = function_call.args or {}
 
                     if function_call.name == "calculator":
-
-                        args = function_call.args or {}
-
                         print("\n[Agent] Calculator tool selected")
+                        result = calculator(args["expression"])
 
-                        result = calculator(
-                            args["expression"]
+                    elif function_call.name == "quiz_generator":
+                        print("\n[Agent] Quiz Generator tool selected")
+                        result = quiz_generator(
+                            args["topic"],
+                            args["questions"]
                         )
 
-                        print("[Tool] Result:", result)
+                    else:
+                        continue
 
-                        function_responses.append(
-                            types.Part.from_function_response(
-                                name=function_call.name,
-                                response=result
-                            )
+                    print("[Tool] Result:", result)
+
+                    function_responses.append(
+                        types.Part.from_function_response(
+                            name=function_call.name,
+                            response=result
                         )
+                    )
 
                 # Step 4: Send tool result back to Gemini
                 final_response = client.models.generate_content(
