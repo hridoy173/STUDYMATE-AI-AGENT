@@ -197,6 +197,120 @@ class StudyMateAgent:
 
 
 
+    def generate_quiz(
+        self,
+        topic: str,
+        number_of_questions: int,
+        difficulty: str,
+        language: str
+    ) -> dict:
+        """
+        Generate and validate structured MCQ quiz data.
+        """
+
+        prompt = f"""
+        Generate exactly {number_of_questions} multiple-choice questions.
+
+        Topic: {topic}
+        Difficulty: {difficulty}
+        Language: {language}
+
+        Requirements:
+        - Generate exactly {number_of_questions} questions.
+        - Every question must have exactly four options.
+        - Provide one correct answer for each question.
+        - Provide a clear explanation for each correct answer.
+        - Use the quiz_generator tool.
+        - Do not return the quiz as plain text.
+        """
+
+        for attempt in range(3):
+
+            try:
+
+                response = client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=self.system_prompt,
+                        tools=self.tools,
+                        tool_config=types.ToolConfig(
+                            function_calling_config=types.FunctionCallingConfig(
+                                mode="ANY",
+                                allowed_function_names=["quiz_generator"]
+                            )
+                        )
+                    )
+                )
+
+                function_calls = response.function_calls
+
+                if not function_calls:
+                    return {
+                        "success": False,
+                        "error": "Gemini did not generate structured quiz data."
+                    }
+
+                for function_call in function_calls:
+
+                    if function_call.name == "quiz_generator":
+
+                        args = function_call.args or {}
+
+                        result = quiz_generator(
+                            topic=args.get("topic", topic),
+                            questions=args.get("questions", [])
+                        )
+
+                        if not result.get("success"):
+                            return result
+
+                        if result["total_questions"] != number_of_questions:
+                            return {
+                                "success": False,
+                                "error": (
+                                    f"Expected {number_of_questions} questions, "
+                                    f"but received {result['total_questions']}."
+                                )
+                            }
+
+                        return result
+
+                return {
+                    "success": False,
+                    "error": "Quiz Generator tool was not called."
+                }
+
+            except errors.ServerError:
+
+                if attempt == 2:
+                    return {
+                        "success": False,
+                        "error": "Gemini server is busy. Please try again later."
+                    }
+
+                wait_time = 2 ** (attempt + 1)
+
+                print(
+                    f"Server busy. Retrying in {wait_time} seconds..."
+                )
+
+                time.sleep(wait_time)
+
+            except (errors.APIError, KeyError, ValueError) as e:
+
+                return {
+                    "success": False,
+                    "error": str(e)
+                }
+
+        return {
+            "success": False,
+            "error": "Unable to generate quiz."
+        }
+
+
+
     def ask(self, question: str) -> str:
 
         for attempt in range(3):
@@ -243,7 +357,7 @@ class StudyMateAgent:
                         print("\n[Agent] Notes Summarizer tool selected")
 
                         result = notes_summarizer(args["text"])
-                        
+
 
                     elif function_call.name == "study_planner":
 

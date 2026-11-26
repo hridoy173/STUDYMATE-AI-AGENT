@@ -10,7 +10,10 @@ from db import (
     update_conversation_title,
     delete_conversation,
     save_feature_history,
-    get_feature_history
+    get_feature_history,
+    save_quiz_progress,
+    get_quiz_progress,
+    delete_quiz_progress
 )
 
 from agent import agent
@@ -120,7 +123,7 @@ st.markdown("""
 # -----------------------------
 with st.sidebar:
 
-    st.title("🎓 StudyMate AI")
+    st.title("🎓 StudyMate Agent")
 
     st.write(
         "Your intelligent AI-powered student assistant."
@@ -220,7 +223,7 @@ with st.sidebar:
 
     st.divider()
 
-    st.caption("Developed with Python,SQLlite,Gemini AI & Streamlit.Developed by the StudyMate AI Team (AS Hridoy & Md Jahid )")
+    st.caption("Developed with Python,SQLlite,Gemini AI & Streamlit.Developed by the StudyMate AI Agent Team (AS Hridoy & Md Jahid )")
 
 
 
@@ -228,7 +231,7 @@ with st.sidebar:
 # Main Header
 # -----------------------------
 st.markdown(
-    '<div class="main-title">🎓 StudyMate AI Agent</div>',
+    '<div class="main-title">🎓 StudyMate Agent</div>',
     unsafe_allow_html=True
 )
 
@@ -293,19 +296,51 @@ if not st.session_state.messages:
     """)
 
 
+
 # =====================================
 # QUIZ GENERATOR PAGE
 # =====================================
 
 if selected_page == "Quiz Generator":
 
-    st.title("🧠 Quiz Generator")
+    import json
+
+    st.title("🧠 Interactive Quiz Generator")
 
     st.write(
-        "Generate AI-powered multiple-choice questions "
-        "to test your knowledge."
+        "Generate MCQs, answer questions, submit your quiz "
+        "and check your score."
     )
 
+    # Load quiz progress from database
+    if st.session_state.get("quiz_conversation_id") != st.session_state["conversation_id"]:
+
+        conversation_id = st.session_state["conversation_id"]
+
+        st.session_state["quiz_conversation_id"] = conversation_id
+
+        progress = get_quiz_progress(conversation_id)
+
+        if progress:
+
+            st.session_state["quiz_data"] = progress["quiz_data"]
+            st.session_state["quiz_answers"] = progress["answers"]
+            st.session_state["quiz_index"] = progress["current_index"]
+            st.session_state["quiz_submitted"] = progress["is_submitted"]
+
+            # Restore selected radio answers
+            for index, answer in progress["answers"].items():
+                st.session_state[f"quiz_answer_{index}"] = answer
+
+        else:
+
+            st.session_state.pop("quiz_data", None)
+            st.session_state.pop("quiz_answers", None)
+            st.session_state.pop("quiz_index", None)
+            st.session_state.pop("quiz_submitted", None)
+
+
+    # Quiz generation form
     with st.form("quiz_form"):
 
         topic = st.text_input(
@@ -333,6 +368,7 @@ if selected_page == "Quiz Generator":
             use_container_width=True
         )
 
+    # Generate structured quiz
     if submitted:
 
         if not topic.strip():
@@ -341,48 +377,350 @@ if selected_page == "Quiz Generator":
 
         else:
 
-            quiz_prompt = f"""
-            Generate exactly {number_of_questions} MCQ questions
-            about {topic}.
+            with st.spinner("Generating your interactive quiz..."):
 
-            Difficulty: {difficulty}
-            Language: {language}
+                result = agent.generate_quiz(
+                    topic=topic,
+                    number_of_questions=number_of_questions,
+                    difficulty=difficulty,
+                    language=language
+                )
 
-            Include:
-            - Four options per question
-            - Correct answer
-            - Explanation for every answer
+            if result["success"]:
 
-            Use the quiz_generator tool.
-            """
+                st.session_state["quiz_data"] = result
+                st.session_state["quiz_answers"] = {}
+                st.session_state["quiz_index"] = 0
+                st.session_state["quiz_submitted"] = False
 
-            with st.spinner("Generating your quiz..."):
+                save_quiz_progress(
+                    st.session_state["conversation_id"],
+                    st.session_state["quiz_data"],
+                    st.session_state["quiz_answers"],
+                    st.session_state["quiz_index"],
+                    False
+                )
 
-                try:
+                # Clear previous radio selections
+                for i in range(len(result["questions"])):
+                    st.session_state.pop(f"quiz_answer_{i}", None)
 
-                    result = agent.ask(quiz_prompt)
+                save_feature_history(
+                    st.session_state["conversation_id"],
+                    "Quiz Generator",
+                    {
+                        "topic": topic,
+                        "questions": number_of_questions,
+                        "difficulty": difficulty,
+                        "language": language
+                    },
+                    json.dumps(result, ensure_ascii=False, indent=2)
+                )
 
-                    save_feature_history(
-                        st.session_state["conversation_id"],
-                        "Quiz Generator",
-                        {
-                            "topic": topic,
-                            "questions": number_of_questions,
-                            "difficulty": difficulty,
-                            "language": language
-                        },
-                        result
+                st.success("Quiz generated successfully!")
+
+            else:
+
+                st.error(
+                    f"Quiz generation failed: {result['error']}"
+                )
+
+    # Display active quiz
+    if "quiz_data" in st.session_state:
+
+        quiz = st.session_state["quiz_data"]
+        questions = quiz["questions"]
+        total_questions = len(questions)
+
+        st.divider()
+
+        st.subheader(f"📚 {quiz['topic']}")
+
+        st.caption(
+            f"Total Questions: {total_questions}"
+        )
+
+        # Show quiz result after submission
+        if st.session_state.get("quiz_submitted", False):
+
+            answers = st.session_state["quiz_answers"]
+
+            correct_count = sum(
+                1
+                for i, question in enumerate(questions)
+                if answers.get(i) == question["correct_answer"]
+            )
+
+            wrong_count = total_questions - correct_count
+            percentage = (correct_count / total_questions) * 100
+
+            st.divider()
+
+            st.subheader("🏆 Your Quiz Result")
+
+            col1, col2, col3 = st.columns(3)
+
+            col1.metric(
+                "Correct Answers",
+                correct_count
+            )
+
+            col2.metric(
+                "Wrong / Unanswered",
+                wrong_count
+            )
+
+            col3.metric(
+                "Score",
+                f"{percentage:.1f}%"
+            )
+
+            st.progress(percentage / 100)
+
+            st.markdown("### 📝 Answer Review")
+
+            for i, question in enumerate(questions):
+
+                student_answer = answers.get(i)
+
+                is_correct = (
+                    student_answer == question["correct_answer"]
+                )
+
+                with st.expander(
+                    f"Question {i + 1} — "
+                    f"{'✅ Correct' if is_correct else '❌ Incorrect'}"
+                ):
+
+                    st.write(question["question"])
+
+                    st.write(
+                        f"**Your Answer:** "
+                        f"{student_answer or 'Not answered'}"
                     )
 
-                    st.success("Quiz generated and saved successfully!")
+                    st.write(
+                        f"**Correct Answer:** "
+                        f"{question['correct_answer']}"
+                    )
 
-                except Exception as e:
+                    st.info(
+                        f"Explanation: {question['explanation']}"
+                    )
 
-                    st.error(f"Quiz generation failed: {e}")
+            if st.button(
+                "🔄 Try Another Quiz",
+                use_container_width=True
+            ):
+
+                delete_quiz_progress(st.session_state["conversation_id"])
+
+                st.session_state.pop("quiz_data", None)
+                st.session_state.pop("quiz_answers", None)
+                st.session_state.pop("quiz_index", None)
+                st.session_state.pop("quiz_submitted", None)
+
+                for i in range(total_questions):
+                    st.session_state.pop(f"quiz_answer_{i}", None)
+
+                st.rerun()
+
+        else:
+
+            current_index = st.session_state["quiz_index"]
+            question = questions[current_index]
+
+            # Progress
+            st.progress(
+                (current_index + 1) / total_questions
+            )
+
+            st.caption(
+                f"Question {current_index + 1} of {total_questions}"
+            )
+
+            st.subheader(question["question"])
+
+            # Answer selection
+            selected_answer = st.radio(
+                "Select your answer:",
+                options=question["options"],
+                index=None,
+                key=f"quiz_answer_{current_index}"
+            )
+
+            if selected_answer is not None:
+
+                st.session_state["quiz_answers"][current_index] = selected_answer
+
+                save_quiz_progress(
+                    st.session_state["conversation_id"],
+                    st.session_state["quiz_data"],
+                    st.session_state["quiz_answers"],
+                    current_index,
+                    False
+                )
+
+            answered_count = len(
+                st.session_state["quiz_answers"]
+            )
+
+            st.caption(
+                f"Answered: {answered_count}/{total_questions}"
+            )
+
+            st.divider()
+
+            # Navigation buttons
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+
+                if current_index > 0:
+
+                    if st.button("⬅️ Previous", use_container_width=True):
+
+                        st.session_state["quiz_index"] -= 1
+
+                        save_quiz_progress(
+                            st.session_state["conversation_id"],
+                            st.session_state["quiz_data"],
+                            st.session_state["quiz_answers"],
+                            st.session_state["quiz_index"],
+                            False
+                        )
+
+                        st.rerun()
+
+            with col2:
+
+                if current_index < total_questions - 1:
+
+                   if st.button("Next ➡️", use_container_width=True):
+
+                        st.session_state["quiz_index"] += 1
+
+                        save_quiz_progress(
+                            st.session_state["conversation_id"],
+                            st.session_state["quiz_data"],
+                            st.session_state["quiz_answers"],
+                            st.session_state["quiz_index"],
+                            False
+                        )
+
+                        st.rerun()
+
+            with col3:
+
+                if st.button("📤 Submit Quiz", use_container_width=True):
+
+                    st.session_state["quiz_submitted"] = True
+
+                    save_quiz_progress(
+                        st.session_state["conversation_id"],
+                        st.session_state["quiz_data"],
+                        st.session_state["quiz_answers"],
+                        st.session_state["quiz_index"],
+                        True
+                    )
+
+                    st.rerun()
 
     display_feature_history("Quiz Generator")
 
     st.stop()
+
+
+# =====================================
+# QUIZ GENERATOR PAGE
+# =====================================
+
+# if selected_page == "Quiz Generator":
+
+#     st.title("🧠 Quiz Generator")
+
+#     st.write(
+#         "Generate AI-powered multiple-choice questions "
+#         "to test your knowledge."
+#     )
+
+#     with st.form("quiz_form"):
+
+#         topic = st.text_input(
+#             "Subject / Topic",
+#             placeholder="Example: Computer Networks"
+#         )
+
+#         number_of_questions = st.selectbox(
+#             "Number of Questions",
+#             [5, 10, 15, 20]
+#         )
+
+#         difficulty = st.selectbox(
+#             "Difficulty Level",
+#             ["Easy", "Medium", "Hard"]
+#         )
+
+#         language = st.selectbox(
+#             "Language",
+#             ["English", "Bangla", "English and Bangla"]
+#         )
+
+#         submitted = st.form_submit_button(
+#             "🚀 Generate Quiz",
+#             use_container_width=True
+#         )
+
+#     if submitted:
+
+#         if not topic.strip():
+
+#             st.warning("Please enter a topic.")
+
+#         else:
+
+#             quiz_prompt = f"""
+#             Generate exactly {number_of_questions} MCQ questions
+#             about {topic}.
+
+#             Difficulty: {difficulty}
+#             Language: {language}
+
+#             Include:
+#             - Four options per question
+#             - Correct answer
+#             - Explanation for every answer
+
+#             Use the quiz_generator tool.
+#             """
+
+#             with st.spinner("Generating your quiz..."):
+
+#                 try:
+
+#                     result = agent.ask(quiz_prompt)
+
+#                     save_feature_history(
+#                         st.session_state["conversation_id"],
+#                         "Quiz Generator",
+#                         {
+#                             "topic": topic,
+#                             "questions": number_of_questions,
+#                             "difficulty": difficulty,
+#                             "language": language
+#                         },
+#                         result
+#                     )
+
+#                     st.success("Quiz generated and saved successfully!")
+
+#                 except Exception as e:
+
+#                     st.error(f"Quiz generation failed: {e}")
+
+#     display_feature_history("Quiz Generator")
+
+#     st.stop()
 
 
 # ==============================
@@ -744,6 +1082,7 @@ for message in st.session_state.messages:
 
         st.markdown(message["content"])
 
+
 # -----------------------------
 # Chat Input
 # -----------------------------
@@ -779,7 +1118,7 @@ if prompt:
     # Generate AI response
     with st.chat_message("assistant"):
 
-        with st.spinner("StudyMate AI is thinking..."):
+        with st.spinner("StudyMate AI Agent is thinking..."):
 
             try:
                 # response = agent.ask(prompt)

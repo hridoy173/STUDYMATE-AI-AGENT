@@ -55,6 +55,20 @@ def init_db():
             )
         """)
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS quiz_progress (
+                conversation_id TEXT PRIMARY KEY,
+                quiz_data TEXT NOT NULL,
+                answers TEXT NOT NULL,
+                current_index INTEGER NOT NULL DEFAULT 0,
+                is_submitted INTEGER NOT NULL DEFAULT 0,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (conversation_id)
+                REFERENCES conversations(id)
+                ON DELETE CASCADE
+            )
+        """)
+
 
 def create_conversation(title="New Chat"):
 
@@ -191,3 +205,78 @@ def get_feature_history(conversation_id, feature_name=None):
         history.append(item)
 
     return history
+
+
+def save_quiz_progress(
+    conversation_id,
+    quiz_data,
+    answers,
+    current_index,
+    is_submitted
+):
+    import json
+
+    init_db()
+
+    with get_connection() as conn:
+        conn.execute("""
+            INSERT INTO quiz_progress (
+                conversation_id,
+                quiz_data,
+                answers,
+                current_index,
+                is_submitted,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+
+            ON CONFLICT(conversation_id)
+            DO UPDATE SET
+                quiz_data = excluded.quiz_data,
+                answers = excluded.answers,
+                current_index = excluded.current_index,
+                is_submitted = excluded.is_submitted,
+                updated_at = CURRENT_TIMESTAMP
+        """, (
+            conversation_id,
+            json.dumps(quiz_data, ensure_ascii=False),
+            json.dumps(answers, ensure_ascii=False),
+            current_index,
+            int(is_submitted)
+        ))
+
+
+def get_quiz_progress(conversation_id):
+    import json
+
+    init_db()
+
+    with get_connection() as conn:
+        row = conn.execute("""
+            SELECT quiz_data, answers, current_index, is_submitted
+            FROM quiz_progress
+            WHERE conversation_id = ?
+        """, (conversation_id,)).fetchone()
+
+    if row is None:
+        return None
+
+    return {
+        "quiz_data": json.loads(row["quiz_data"]),
+        "answers": {
+            int(key): value
+            for key, value in json.loads(row["answers"]).items()
+        },
+        "current_index": row["current_index"],
+        "is_submitted": bool(row["is_submitted"])
+    }
+
+
+def delete_quiz_progress(conversation_id):
+    init_db()
+
+    with get_connection() as conn:
+        conn.execute("""
+            DELETE FROM quiz_progress
+            WHERE conversation_id = ?
+        """, (conversation_id,))
