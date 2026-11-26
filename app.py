@@ -405,6 +405,28 @@ if selected_page == "Quiz Generator":
                 for i in range(len(result["questions"])):
                     st.session_state.pop(f"quiz_answer_{i}", None)
 
+                formatted_result = ""
+
+                for index, question in enumerate(result["questions"], start=1):
+
+                    formatted_result += f"""
+                ### Question {index}
+
+                **{question['question']}**
+
+                """
+
+                    for option_index, option in enumerate(question["options"], start=1):
+                        formatted_result += f"{option_index}. {option}\n"
+
+                    formatted_result += f"""
+                **Correct Answer:** {question['correct_answer']}
+
+                **Explanation:** {question['explanation']}
+
+                ---
+                """
+
                 save_feature_history(
                     st.session_state["conversation_id"],
                     "Quiz Generator",
@@ -414,7 +436,7 @@ if selected_page == "Quiz Generator":
                         "difficulty": difficulty,
                         "language": language
                     },
-                    json.dumps(result, ensure_ascii=False, indent=2)
+                    formatted_result
                 )
 
                 st.success("Quiz generated successfully!")
