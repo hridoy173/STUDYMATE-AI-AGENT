@@ -8,9 +8,42 @@ from db import (
     get_messages,
     save_message,
     update_conversation_title,
-    delete_conversation
+    delete_conversation,
+    save_feature_history,
+    get_feature_history
 )
+
 from agent import agent
+
+
+
+## Display Feature History
+
+def display_feature_history(feature_name):
+
+    history = get_feature_history(
+        st.session_state["conversation_id"],
+        feature_name
+    )
+
+    st.markdown("---")
+    st.subheader(f"📚 Previous {feature_name} History")
+
+    if not history:
+        st.info("No previous results found.")
+        return
+
+    for item in history:
+
+        with st.expander(
+            f"{feature_name} — {item['created_at']}"
+        ):
+
+            st.markdown("**Input Details**")
+            st.json(item["input_data"])
+
+            st.markdown("**Generated Result**")
+            st.markdown(item["output_data"])
 
 
 # -----------------------------
@@ -329,12 +362,25 @@ if selected_page == "Quiz Generator":
 
                     result = agent.ask(quiz_prompt)
 
-                    st.markdown("### Your Quiz")
-                    st.markdown(result)
+                    save_feature_history(
+                        st.session_state["conversation_id"],
+                        "Quiz Generator",
+                        {
+                            "topic": topic,
+                            "questions": number_of_questions,
+                            "difficulty": difficulty,
+                            "language": language
+                        },
+                        result
+                    )
+
+                    st.success("Quiz generated and saved successfully!")
 
                 except Exception as e:
 
                     st.error(f"Quiz generation failed: {e}")
+
+    display_feature_history("Quiz Generator")
 
     st.stop()
 
@@ -427,10 +473,19 @@ if selected_page == "Notes Summarizer":
 
                     result = agent.ask(summarizer_prompt)
 
-                    st.markdown("---")
-                    st.subheader("📖 Summary Result")
+                    save_feature_history(
+                        st.session_state["conversation_id"],
+                        "Notes Summarizer",
+                        {
+                            "notes": notes,
+                            "summary_length": summary_length,
+                            "language": summary_language,
+                            "include_key_points": include_key_points
+                        },
+                        result
+                    )
 
-                    st.markdown(result)
+                    st.success("Summary generated and saved successfully!")
 
                 except Exception as e:
 
@@ -439,6 +494,8 @@ if selected_page == "Notes Summarizer":
                     st.info(
                         "Please try again in a few moments."
                     )
+
+    display_feature_history("Notes Summarizer")
 
     st.stop()
 
@@ -537,10 +594,20 @@ if selected_page == "Study Planner":
 
                     result = agent.ask(planner_prompt)
 
-                    st.markdown("---")
-                    st.subheader("📚 Your Study Plan")
+                    save_feature_history(
+                        st.session_state["conversation_id"],
+                        "Study Planner",
+                        {
+                            "subject": subject,
+                            "topics": topics,
+                            "days": days,
+                            "hours_per_day": hours_per_day,
+                            "language": language
+                        },
+                        result
+                    )
 
-                    st.markdown(result)
+                    st.success("Study plan generated and saved successfully!")
 
                 except Exception:
 
@@ -549,6 +616,8 @@ if selected_page == "Study Planner":
                     st.info(
                         "Please try again in a few moments."
                     )
+                    
+    display_feature_history("Study Planner")
 
     st.stop()
 
@@ -633,6 +702,17 @@ if selected_page == "Calculator":
             elif operation == "Percentage (%)":
                 result = (num1 * num2) / 100
 
+            save_feature_history(
+                    st.session_state["conversation_id"],
+                    "Calculator",
+                    {
+                        "first_number": num1,
+                        "second_number": num2,
+                        "operation": operation
+                    },
+                    str(result)
+                )
+
             st.markdown("---")
 
             st.subheader("📊 Calculation Result")
@@ -648,11 +728,12 @@ if selected_page == "Calculator":
 
             st.error(f"Calculation error: {e}")
 
-    st.info(
-        "💡 This calculator works locally and does not require a Gemini API request."
-    )
+    st.info("💡 This calculator works locally and does not require a Gemini API request.")
+
+    display_feature_history("Calculator")
 
     st.stop()
+
 
 # -----------------------------
 # Display Chat History

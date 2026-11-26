@@ -1,6 +1,7 @@
 
 import sqlite3
 import uuid
+import json
 from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent / "studymate.db"
@@ -31,6 +32,21 @@ def init_db():
                 conversation_id TEXT NOT NULL,
                 role TEXT NOT NULL,
                 content TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+                FOREIGN KEY (conversation_id)
+                REFERENCES conversations(id)
+                ON DELETE CASCADE
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS feature_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                conversation_id TEXT NOT NULL,
+                feature_name TEXT NOT NULL,
+                input_data TEXT NOT NULL,
+                output_data TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
                 FOREIGN KEY (conversation_id)
@@ -116,3 +132,62 @@ def delete_conversation(conversation_id):
             DELETE FROM conversations
             WHERE id = ?
         """, (conversation_id,))
+
+
+def save_feature_history(
+    conversation_id,
+    feature_name,
+    input_data,
+    output_data
+):
+    init_db()
+
+    with get_connection() as conn:
+        conn.execute("""
+            INSERT INTO feature_history (
+                conversation_id,
+                feature_name,
+                input_data,
+                output_data
+            )
+            VALUES (?, ?, ?, ?)
+        """, (
+            conversation_id,
+            feature_name,
+            json.dumps(input_data, ensure_ascii=False),
+            output_data
+        ))
+
+
+def get_feature_history(conversation_id, feature_name=None):
+    init_db()
+
+    with get_connection() as conn:
+
+        if feature_name:
+            rows = conn.execute("""
+                SELECT id, feature_name, input_data,
+                       output_data, created_at
+                FROM feature_history
+                WHERE conversation_id = ?
+                AND feature_name = ?
+                ORDER BY id DESC
+            """, (conversation_id, feature_name)).fetchall()
+
+        else:
+            rows = conn.execute("""
+                SELECT id, feature_name, input_data,
+                       output_data, created_at
+                FROM feature_history
+                WHERE conversation_id = ?
+                ORDER BY id DESC
+            """, (conversation_id,)).fetchall()
+
+    history = []
+
+    for row in rows:
+        item = dict(row)
+        item["input_data"] = json.loads(item["input_data"])
+        history.append(item)
+
+    return history
