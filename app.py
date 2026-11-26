@@ -12,6 +12,7 @@ from db import (
 )
 from agent import agent
 
+
 # -----------------------------
 # Page Configuration
 # -----------------------------
@@ -30,6 +31,7 @@ st.set_page_config(
 
 init_db()
 
+
 # Initialize conversation ID
 if "conversation_id" not in st.session_state:
 
@@ -39,6 +41,7 @@ if "conversation_id" not in st.session_state:
         st.session_state["conversation_id"] = conversations[0]["id"]
     else:
         st.session_state["conversation_id"] = create_conversation()
+
 
 # Initialize messages independently
 if "messages" not in st.session_state:
@@ -184,15 +187,15 @@ with st.sidebar:
 
     st.divider()
 
-    st.caption("Developed with Python, Gemini AI & Streamlit")
-    st.caption("Developed by the StudyMate AI Team (AS Hridoy || Md Jahid)")
+    st.caption("Developed with Python,SQLlite,Gemini AI & Streamlit.Developed by the StudyMate AI Team (AS Hridoy & Md Jahid )")
+
 
 
 # -----------------------------
 # Main Header
 # -----------------------------
 st.markdown(
-    '<div class="main-title">🎓 StudyMate AI</div>',
+    '<div class="main-title">🎓 StudyMate AI Agent</div>',
     unsafe_allow_html=True
 )
 
@@ -213,7 +216,7 @@ if "messages" not in st.session_state:
 
 if not st.session_state.messages:
 
-    st.markdown("## 👋 Welcome to StudyMate AI!")
+    st.markdown("## 👋 Welcome to StudyMate AI Agent!")
 
     st.write(
         "I can help you study, understand complex topics, "
@@ -334,6 +337,112 @@ if selected_page == "Quiz Generator":
                     st.error(f"Quiz generation failed: {e}")
 
     st.stop()
+
+
+# ==============================
+# NOTES SUMMARIZER PAGE
+# ==============================
+
+if selected_page == "Notes Summarizer":
+
+    st.title("📝 Notes Summarizer")
+    st.write(
+        "Paste your study notes and let AI turn them into "
+        "easy-to-understand summaries."
+    )
+
+    with st.form("notes_summarizer_form"):
+
+        notes = st.text_area(
+            "Your Study Notes",
+            placeholder="Paste your lecture notes, textbook content, or study materials here...",
+            height=300
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            summary_length = st.selectbox(
+                "Summary Length",
+                ["Short", "Medium", "Detailed"]
+            )
+
+        with col2:
+            summary_language = st.selectbox(
+                "Summary Language",
+                ["English", "Bangla", "English and Bangla"]
+            )
+
+        include_key_points = st.checkbox(
+            "Include important key points",
+            value=True
+        )
+
+        submitted = st.form_submit_button(
+            "✨ Summarize Notes",
+            use_container_width=True
+        )
+
+    if submitted:
+
+        if not notes.strip():
+            st.warning("Please paste your study notes first.")
+
+        elif len(notes.strip()) < 30:
+            st.warning(
+                "Please provide at least 30 characters of notes "
+                "for a meaningful summary."
+            )
+
+        else:
+
+            summarizer_prompt = f"""
+            You are StudyMate AI, an intelligent student assistant.
+
+            Summarize the following study notes.
+
+            Summary Length: {summary_length}
+            Language: {summary_language}
+            Include Key Points: {include_key_points}
+
+            Instructions:
+            - Use the notes_summarizer tool.
+            - Preserve the original meaning of the notes.
+            - Use simple, student-friendly language.
+            - Do not invent information that is not present in the notes.
+            - Organize the summary with clear headings.
+            - If key points are requested, include important points
+              in bullet lists.
+            - If the language is Bangla, explain technical terms
+              in English where necessary.
+            - If English and Bangla are requested, provide both.
+
+            Study Notes:
+            {notes}
+            """
+
+            with st.spinner("AI is analyzing your notes..."):
+
+                try:
+
+                    result = agent.ask(summarizer_prompt)
+
+                    st.markdown("---")
+                    st.subheader("📖 Summary Result")
+
+                    st.markdown(result)
+
+                except Exception as e:
+
+                    st.error("Failed to summarize notes.")
+
+                    st.info(
+                        "Please try again in a few moments."
+                    )
+
+    st.stop()
+
+
 
 # -----------------------------
 # Display Chat History
