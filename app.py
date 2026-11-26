@@ -1,5 +1,15 @@
 
 import streamlit as st
+
+from db import (
+    init_db,
+    create_conversation,
+    get_conversations,
+    get_messages,
+    save_message,
+    update_conversation_title,
+    delete_conversation
+)
 from agent import agent
 
 # -----------------------------
@@ -11,6 +21,32 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+
+
+# =====================================
+# DATABASE & SESSION INITIALIZATION
+# =====================================
+
+init_db()
+
+# Initialize conversation ID
+if "conversation_id" not in st.session_state:
+
+    conversations = get_conversations()
+
+    if conversations:
+        st.session_state["conversation_id"] = conversations[0]["id"]
+    else:
+        st.session_state["conversation_id"] = create_conversation()
+
+# Initialize messages independently
+if "messages" not in st.session_state:
+
+    st.session_state["messages"] = get_messages(
+        st.session_state["conversation_id"]
+    )
+
 
 # -----------------------------
 # Custom CSS
@@ -41,6 +77,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
+
 # -----------------------------
 # Sidebar
 # -----------------------------
@@ -66,15 +104,89 @@ with st.sidebar:
 
     st.divider()
 
-    st.subheader("⚙️ Chat Settings")
+    st.subheader("📚 Learning Workspace")
 
-    if st.button("🗑️ Clear Chat", use_container_width=True):
+    selected_page = st.radio(
+        "Choose a feature",
+        [
+            "AI Chat",
+            "Quiz Generator",
+            "Notes Summarizer",
+            "Study Planner",
+            "Calculator"
+        ],
+        label_visibility="collapsed"
+    )
+
+    st.divider()
+
+    st.subheader("💬 Conversations")
+
+    # Create a new conversation
+    if st.button("➕ New Chat", use_container_width=True):
+
+        st.session_state["conversation_id"] = create_conversation()
         st.session_state.messages = []
+
+        st.rerun()
+
+
+    # Load previous conversations
+    conversations = get_conversations()
+
+    if conversations:
+
+        conversation_ids = [
+            conversation["id"]
+            for conversation in conversations
+        ]
+
+        # current_id = st.session_state["conversation_id"]
+        current_id = st.session_state["conversation_id"]
+
+        selected_id = st.selectbox(
+            "Previous Conversations",
+            options=conversation_ids,
+            index=(
+                conversation_ids.index(current_id)
+                if current_id in conversation_ids
+                else 0
+            ),
+            format_func=lambda cid: next(
+                (
+                    item["title"]
+                    for item in conversations
+                    if item["id"] == cid
+                ),
+                "Untitled Chat"
+            )
+        )
+
+    # Load selected conversation
+    if selected_id != current_id:
+
+        st.session_state["conversation_id"] = selected_id
+
+        st.session_state.messages = get_messages(selected_id)
+
+        st.rerun()
+
+
+    # Delete current conversation
+    if st.button("🗑️ Clear Current Chat", use_container_width=True):
+
+        delete_conversation(st.session_state["conversation_id"])
+
+        st.session_state["conversation_id"] = create_conversation()
+        st.session_state.messages = []
+
         st.rerun()
 
     st.divider()
 
     st.caption("Developed with Python, Gemini AI & Streamlit")
+    st.caption("Developed by the StudyMate AI Team (AS Hridoy || Md Jahid)")
+
 
 # -----------------------------
 # Main Header
@@ -90,6 +202,8 @@ st.markdown(
     '</div>',
     unsafe_allow_html=True
 )
+
+
 
 # -----------------------------
 # Welcome Section
@@ -142,6 +256,85 @@ if not st.session_state.messages:
     - Calculate 25% of 8500.
     """)
 
+
+# =====================================
+# QUIZ GENERATOR PAGE
+# =====================================
+
+if selected_page == "Quiz Generator":
+
+    st.title("🧠 Quiz Generator")
+
+    st.write(
+        "Generate AI-powered multiple-choice questions "
+        "to test your knowledge."
+    )
+
+    with st.form("quiz_form"):
+
+        topic = st.text_input(
+            "Subject / Topic",
+            placeholder="Example: Computer Networks"
+        )
+
+        number_of_questions = st.selectbox(
+            "Number of Questions",
+            [5, 10, 15, 20]
+        )
+
+        difficulty = st.selectbox(
+            "Difficulty Level",
+            ["Easy", "Medium", "Hard"]
+        )
+
+        language = st.selectbox(
+            "Language",
+            ["English", "Bangla", "English and Bangla"]
+        )
+
+        submitted = st.form_submit_button(
+            "🚀 Generate Quiz",
+            use_container_width=True
+        )
+
+    if submitted:
+
+        if not topic.strip():
+
+            st.warning("Please enter a topic.")
+
+        else:
+
+            quiz_prompt = f"""
+            Generate exactly {number_of_questions} MCQ questions
+            about {topic}.
+
+            Difficulty: {difficulty}
+            Language: {language}
+
+            Include:
+            - Four options per question
+            - Correct answer
+            - Explanation for every answer
+
+            Use the quiz_generator tool.
+            """
+
+            with st.spinner("Generating your quiz..."):
+
+                try:
+
+                    result = agent.ask(quiz_prompt)
+
+                    st.markdown("### Your Quiz")
+                    st.markdown(result)
+
+                except Exception as e:
+
+                    st.error(f"Quiz generation failed: {e}")
+
+    st.stop()
+
 # -----------------------------
 # Display Chat History
 # -----------------------------
@@ -160,11 +353,25 @@ prompt = st.chat_input(
 
 if prompt:
 
-    # Display user message
+    # Save user message in session and database
     st.session_state.messages.append({
         "role": "user",
         "content": prompt
     })
+
+    save_message(
+        st.session_state["conversation_id"],
+        "user",
+        prompt
+    )
+
+    # Set conversation title using the first message
+    if len(st.session_state.messages) == 1:
+
+        update_conversation_title(
+            st.session_state["conversation_id"],
+            prompt
+        )
 
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -207,10 +414,18 @@ if prompt:
 
                 st.markdown(response)
 
+                # Save AI response in session and database
+
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": response
                 })
+
+                save_message(
+                    st.session_state["conversation_id"],
+                    "assistant",
+                    response
+                )
 
             except Exception as e:
 
