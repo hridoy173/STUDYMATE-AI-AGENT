@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types, errors
 
-from tools import calculator, quiz_generator , notes_summarizer
+from tools import calculator, quiz_generator, notes_summarizer, study_planner
 
 load_dotenv()
 
@@ -49,6 +49,11 @@ class StudyMateAgent:
         - Identify important concepts and key points.
         - Explain difficult terms in simple English and Bangla.
         - When users request note summarization, use the notes_summarizer tool.
+        - Create personalized study schedules.
+        - Ask for subject, topics, available days and daily study hours
+          if the user has not provided enough information.
+        - Use the study_planner tool when creating a study plan.
+        - Present the schedule clearly with day-wise tasks.
 
         Always be friendly and educational.
         """
@@ -57,6 +62,7 @@ class StudyMateAgent:
         self.tools = [
             types.Tool(
                 function_declarations=[
+                    
                     types.FunctionDeclaration(
                         name="calculator",
                         description=(
@@ -80,6 +86,45 @@ class StudyMateAgent:
 
 
                     types.FunctionDeclaration(
+                        name="study_planner",
+                        description=(
+                            "Create a personalized study schedule based on "
+                            "subject, topics, available days and study hours."
+                        ),
+                        parameters=types.Schema(
+                            type=types.Type.OBJECT,
+                            properties={
+                                "subject": types.Schema(
+                                    type=types.Type.STRING,
+                                    description="Subject name."
+                                ),
+                                "topics": types.Schema(
+                                    type=types.Type.ARRAY,
+                                    items=types.Schema(
+                                        type=types.Type.STRING
+                                    ),
+                                    description="List of topics to study."
+                                ),
+                                "days": types.Schema(
+                                    type=types.Type.INTEGER,
+                                    description="Number of available study days."
+                                ),
+                                "hours_per_day": types.Schema(
+                                    type=types.Type.NUMBER,
+                                    description="Available study hours per day."
+                                )
+                            },
+                            required=[
+                                "subject",
+                                "topics",
+                                "days",
+                                "hours_per_day"
+                            ]
+                        )
+                    ),
+
+
+                    types.FunctionDeclaration(
                         name="notes_summarizer",
                         description=(
                             "Prepare and validate student notes for summarization. "
@@ -96,6 +141,7 @@ class StudyMateAgent:
                             required=["text"]
                         )
                     ),
+
                     
                     types.FunctionDeclaration(
                         name="quiz_generator",
@@ -143,6 +189,7 @@ class StudyMateAgent:
                             required=["topic", "questions"]
                         )
                     )
+                
                 ]
             ),
 
@@ -175,33 +222,13 @@ class StudyMateAgent:
                 # Step 3: Execute requested Python tools
                 function_responses = []
 
-                # for function_call in function_calls:
-
-                #     if function_call.name == "calculator":
-
-                #         args = function_call.args or {}
-
-                #         print("\n[Agent] Calculator tool selected")
-
-                #         result = calculator(
-                #             args["expression"]
-                #         )
-
-                #         print("[Tool] Result:", result)
-
-                #         function_responses.append(
-                #             types.Part.from_function_response(
-                #                 name=function_call.name,
-                #                 response=result
-                #             )
-                #         )
-
                 for function_call in function_calls:
                     args = function_call.args or {}
 
                     if function_call.name == "calculator":
                         print("\n[Agent] Calculator tool selected")
                         result = calculator(args["expression"])
+
 
                     elif function_call.name == "quiz_generator":
                         print("\n[Agent] Quiz Generator tool selected")
@@ -216,6 +243,20 @@ class StudyMateAgent:
                         print("\n[Agent] Notes Summarizer tool selected")
 
                         result = notes_summarizer(args["text"])
+                        
+
+                    elif function_call.name == "study_planner":
+
+                        args = function_call.args or {}
+
+                        print("\n[Agent] Study Planner tool selected")
+
+                        result = study_planner(
+                            subject=args["subject"],
+                            topics=args["topics"],
+                            days=args["days"],
+                            hours_per_day=args["hours_per_day"]
+                        )
 
                     else:
                         continue
