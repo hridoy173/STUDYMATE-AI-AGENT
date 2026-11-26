@@ -13,7 +13,9 @@ from db import (
     get_feature_history,
     save_quiz_progress,
     get_quiz_progress,
-    delete_quiz_progress
+    delete_quiz_progress,
+    save_quiz_attempt,
+    get_quiz_attempts,
 )
 
 from agent import agent
@@ -47,6 +49,34 @@ def display_feature_history(feature_name):
 
             st.markdown("**Generated Result**")
             st.markdown(item["output_data"])
+
+
+def display_quiz_attempt_history():
+    st.subheader("📊 Quiz Performance History")
+
+    conversation_id = st.session_state["conversation_id"]
+
+    attempts = get_quiz_attempts(conversation_id)
+
+    if not attempts:
+        st.info("No quiz attempts found yet.")
+        return
+
+    for attempt in attempts:
+        with st.expander(
+            f"{attempt['topic']} | {attempt['percentage']:.1f}% | Grade {attempt['grade']}"
+        ):
+            col1, col2, col3 = st.columns(3)
+
+            col1.metric("Correct", attempt["correct_answers"])
+            col2.metric("Incorrect", attempt["wrong_answers"])
+            col3.metric("Unanswered", attempt["unanswered"])
+
+            st.write(f"**Total Questions:** {attempt['total_questions']}")
+            st.write(f"**Score:** {attempt['percentage']:.2f}%")
+            st.write(f"**Grade:** {attempt['grade']}")
+            st.caption(f"Attempt ID: {attempt['id']}")
+            st.caption(f"Date: {attempt['created_at']}")
 
 
 # -----------------------------
@@ -476,11 +506,38 @@ if selected_page == "Quiz Generator":
             wrong_count = total_questions - correct_count
             percentage = (correct_count / total_questions) * 100
 
+            if percentage >= 90:
+                grade = "A+"
+            elif percentage >= 80:
+                grade = "A"
+            elif percentage >= 70:
+                grade = "B"
+            elif percentage >= 60:
+                grade = "C"
+            elif percentage >= 50:
+                grade = "D"
+            else:
+                grade = "F"
+
+            # Save Result to Database
+            save_quiz_attempt(
+                conversation_id=st.session_state["conversation_id"],
+                topic= quiz["topic"],
+                total_questions=total_questions,
+                correct_answers=correct_count,
+                wrong_answers=wrong_count,
+                unanswered=total_questions - len(answers),
+                percentage=percentage,
+                grade=grade
+            )
+
             st.divider()
+
+            st.success("Quiz Submitted Successfully!")
 
             st.subheader("🏆 Your Quiz Result")
 
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3 , col4 = st.columns(4)
 
             col1.metric(
                 "Correct Answers",
@@ -495,6 +552,10 @@ if selected_page == "Quiz Generator":
             col3.metric(
                 "Score",
                 f"{percentage:.1f}%"
+            )
+
+            col4.metric(
+                "Grade","{grade}%"
             )
 
             st.progress(percentage / 100)
@@ -649,6 +710,7 @@ if selected_page == "Quiz Generator":
                     st.rerun()
 
     display_feature_history("Quiz Generator")
+    display_quiz_attempt_history()
 
     st.stop()
 

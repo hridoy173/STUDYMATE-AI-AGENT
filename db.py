@@ -69,6 +69,24 @@ def init_db():
             )
         """)
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS quiz_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                conversation_id TEXT NOT NULL,
+                topic TEXT NOT NULL,
+                total_questions INTEGER NOT NULL,
+                correct_answers INTEGER NOT NULL,
+                wrong_answers INTEGER NOT NULL,
+                unanswered INTEGER NOT NULL,
+                percentage REAL NOT NULL,
+                grade TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (conversation_id)
+                REFERENCES conversations(id)
+                ON DELETE CASCADE
+            )
+        """)
+
 
 def create_conversation(title="New Chat"):
 
@@ -280,3 +298,54 @@ def delete_quiz_progress(conversation_id):
             DELETE FROM quiz_progress
             WHERE conversation_id = ?
         """, (conversation_id,))
+
+
+def save_quiz_attempt(
+    conversation_id,
+    topic,
+    total_questions,
+    correct_answers,
+    wrong_answers,
+    unanswered,
+    percentage,
+    grade
+):
+    init_db()
+
+    with get_connection() as conn:
+        conn.execute("""
+            INSERT INTO quiz_attempts (
+                conversation_id,
+                topic,
+                total_questions,
+                correct_answers,
+                wrong_answers,
+                unanswered,
+                percentage,
+                grade
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            conversation_id,
+            topic,
+            total_questions,
+            correct_answers,
+            wrong_answers,
+            unanswered,
+            percentage,
+            grade
+        ))
+
+
+def get_quiz_attempts(conversation_id):
+    init_db()
+
+    with get_connection() as conn:
+        rows = conn.execute("""
+            SELECT *
+            FROM quiz_attempts
+            WHERE conversation_id = ?
+            ORDER BY created_at DESC, id DESC
+        """, (conversation_id,)).fetchall()
+
+    return [dict(row) for row in rows]
