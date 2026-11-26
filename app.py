@@ -443,6 +443,216 @@ if selected_page == "Notes Summarizer":
     st.stop()
 
 
+# ==============================
+# STUDY PLANNER PAGE
+# ==============================
+
+if selected_page == "Study Planner":
+
+    st.title("📅 Study Planner")
+    st.write(
+        "Create a personalized study schedule with StudyMate AI."
+    )
+
+    with st.form("study_planner_form"):
+
+        subject = st.text_input(
+            "Subject",
+            placeholder="Example: Computer Networks"
+        )
+
+        topics = st.text_area(
+            "Topics to Study",
+            placeholder="Enter topics separated by commas or new lines...",
+            height=200
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            days = st.number_input(
+                "Study Duration (Days)",
+                min_value=1,
+                max_value=365,
+                value=7
+            )
+
+        with col2:
+            hours_per_day = st.number_input(
+                "Study Hours Per Day",
+                min_value=1,
+                max_value=24,
+                value=3
+            )
+
+        language = st.selectbox(
+            "Plan Language",
+            ["English", "Bangla", "English and Bangla"]
+        )
+
+        submitted = st.form_submit_button(
+            "🚀 Generate Study Plan",
+            use_container_width=True
+        )
+
+    if submitted:
+
+        if not subject.strip():
+            st.warning("Please enter a subject.")
+
+        elif not topics.strip():
+            st.warning("Please enter the topics you want to study.")
+
+        else:
+
+            planner_prompt = f"""
+            You are StudyMate AI, an intelligent academic study planner.
+
+            Create a personalized study schedule.
+
+            Subject: {subject}
+            Topics: {topics}
+            Total Days: {days}
+            Study Hours Per Day: {hours_per_day}
+            Language: {language}
+
+            Instructions:
+            - Use the study_planner tool.
+            - Create a day-by-day study schedule.
+            - Distribute topics evenly across the available days.
+            - Respect the daily study time.
+            - Include short breaks where appropriate.
+            - Include revision sessions.
+            - Include practice questions or exercises.
+            - Include a final revision session if possible.
+            - Do not omit any topic provided by the student.
+            - Make the plan realistic and easy to follow.
+            - Use a clear table or structured format.
+            - Explain in the selected language.
+            """
+
+            with st.spinner("Creating your personalized study plan..."):
+
+                try:
+
+                    result = agent.ask(planner_prompt)
+
+                    st.markdown("---")
+                    st.subheader("📚 Your Study Plan")
+
+                    st.markdown(result)
+
+                except Exception:
+
+                    st.error("Failed to generate study plan.")
+
+                    st.info(
+                        "Please try again in a few moments."
+                    )
+
+    st.stop()
+
+
+# ==============================
+# CALCULATOR PAGE
+# ==============================
+
+if selected_page == "Calculator":
+
+    st.title("🧮 Calculator")
+    st.write("Perform calculations instantly without using AI.")
+
+    with st.form("calculator_form"):
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            num1 = st.number_input(
+                "First Number",
+                value=0.0,
+                format="%g"
+            )
+
+        with col2:
+            num2 = st.number_input(
+                "Second Number",
+                value=0.0,
+                format="%g"
+            )
+
+        operation = st.selectbox(
+            "Select Operation",
+            [
+                "Addition (+)",
+                "Subtraction (-)",
+                "Multiplication (×)",
+                "Division (÷)",
+                "Modulus (%)",
+                "Power (^)",
+                "Percentage (%)"
+            ]
+        )
+
+        calculate_button = st.form_submit_button(
+            "🧮 Calculate",
+            use_container_width=True
+        )
+
+    if calculate_button:
+
+        try:
+
+            if operation == "Addition (+)":
+                result = num1 + num2
+
+            elif operation == "Subtraction (-)":
+                result = num1 - num2
+
+            elif operation == "Multiplication (×)":
+                result = num1 * num2
+
+            elif operation == "Division (÷)":
+
+                if num2 == 0:
+                    st.error("Cannot divide by zero.")
+                    st.stop()
+
+                result = num1 / num2
+
+            elif operation == "Modulus (%)":
+
+                if num2 == 0:
+                    st.error("Cannot calculate modulus with zero.")
+                    st.stop()
+
+                result = num1 % num2
+
+            elif operation == "Power (^)":
+                result = num1 ** num2
+
+            elif operation == "Percentage (%)":
+                result = (num1 * num2) / 100
+
+            st.markdown("---")
+
+            st.subheader("📊 Calculation Result")
+
+            st.success(f"Result: {result}")
+
+            if operation == "Percentage (%)":
+                st.caption(
+                    f"{num2}% of {num1} = {result}"
+                )
+
+        except Exception as e:
+
+            st.error(f"Calculation error: {e}")
+
+    st.info(
+        "💡 This calculator works locally and does not require a Gemini API request."
+    )
+
+    st.stop()
 
 # -----------------------------
 # Display Chat History
