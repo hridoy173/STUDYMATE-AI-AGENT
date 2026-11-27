@@ -1,6 +1,7 @@
 
 import streamlit as st
 
+
 from db import (
     init_db,
     create_conversation,
@@ -19,6 +20,7 @@ from db import (
 )
 
 from agent import agent
+from documentation import render_documentation
 
 
 
@@ -182,7 +184,8 @@ with st.sidebar:
             "Quiz Generator",
             "Notes Summarizer",
             "Study Planner",
-            "Calculator"
+            "Calculator",
+            "Documentation"
         ],
         label_visibility="collapsed"
     )
@@ -325,6 +328,9 @@ if not st.session_state.messages:
     - Calculate 25% of 8500.
     """)
 
+
+if selected_page == "Documentation":
+    render_documentation()
 
 
 # =====================================
