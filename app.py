@@ -533,7 +533,6 @@ if selected_page == "Quiz Generator":
 
             st.divider()
 
-            st.success("Quiz Submitted Successfully!")
 
             st.subheader("🏆 Your Quiz Result")
 
@@ -555,7 +554,7 @@ if selected_page == "Quiz Generator":
             )
 
             col4.metric(
-                "Grade","{grade}%"
+                "Grade", grade
             )
 
             st.progress(percentage / 100)
@@ -629,7 +628,8 @@ if selected_page == "Quiz Generator":
                 "Select your answer:",
                 options=question["options"],
                 index=None,
-                key=f"quiz_answer_{current_index}"
+                key=f"quiz_answer_{current_index}",
+                disabled=st.session_state.get("quiz_submitted", False)
             )
 
             if selected_answer is not None:
@@ -695,21 +695,34 @@ if selected_page == "Quiz Generator":
 
             with col3:
 
-                if st.button("📤 Submit Quiz", use_container_width=True):
+                if st.session_state.get("quiz_submitted", False):
 
-                    st.session_state["quiz_submitted"] = True
+                    st.success("You have already submitted this quiz.")
 
-                    save_quiz_progress(
-                        st.session_state["conversation_id"],
-                        st.session_state["quiz_data"],
-                        st.session_state["quiz_answers"],
-                        st.session_state["quiz_index"],
-                        True
-                    )
+                else:
 
-                    st.rerun()
+                    if st.button("Submit Quiz", key="submit_quiz_btn"):
+
+                        # Existing score calculation
+
+                        # Existing grade calculation
+
+                        # Existing save_quiz_attempt()
+
+                        st.session_state["quiz_submitted"] = True
+
+                        save_quiz_progress(
+                            st.session_state["conversation_id"],
+                            st.session_state["quiz_data"],
+                            st.session_state["quiz_answers"],
+                            st.session_state["quiz_index"],
+                            True
+                        )
+
+                        st.rerun()
 
     display_feature_history("Quiz Generator")
+
     display_quiz_attempt_history()
 
     st.stop()
